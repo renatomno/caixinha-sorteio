@@ -384,7 +384,7 @@
 
 .history-item {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-columns: 52px minmax(0, 1fr) minmax(180px, 220px);
   gap: 10px;
   align-items: center;
   padding: 10px;
@@ -416,6 +416,63 @@
   margin: 4px 0 0;
   line-height: 1.35;
   font-size: 0.86rem;
+}
+
+.history-flags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.toggle-chip {
+  min-height: 56px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(133, 92, 72, 0.14);
+  background: rgba(255, 247, 241, 0.95);
+  color: #6a4031;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.toggle-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(83, 42, 24, 0.08);
+}
+
+.toggle-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.toggle-chip span,
+.toggle-chip strong {
+  display: block;
+}
+
+.toggle-chip span {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.toggle-chip strong {
+  margin-top: 6px;
+  font-size: 1rem;
+  color: #2d190f;
+}
+
+.toggle-chip.checked {
+  background: linear-gradient(135deg, rgba(255, 218, 168, 0.95), rgba(255, 190, 117, 0.95));
+  border-color: rgba(216, 131, 75, 0.32);
 }
 
 .history-details {
@@ -486,6 +543,14 @@
   .card {
     padding: 16px;
     border-radius: 22px;
+  }
+
+  .history-item {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .history-flags {
+    grid-column: 1 / -1;
   }
 
   .number-board {

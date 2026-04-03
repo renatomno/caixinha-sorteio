@@ -4,6 +4,10 @@ import './App.css'
 
 const TRIP_ID = Number(import.meta.env.VITE_SUPABASE_TRIP_ID || 1)
 const NUMBER_POOL = Array.from({ length: 99 }, (_, index) => index + 1)
+const stashOwners = [
+  { key: 'renato_separated', label: 'Renato' },
+  { key: 'livia_separated', label: 'Livia' },
+]
 
 const weekDayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -132,11 +136,7 @@ async function fetchTripState() {
   const [{ data: trip, error: tripError }, { data: draws, error: drawsError }] =
     await Promise.all([
       supabase.from('trips').select('*').eq('id', TRIP_ID).single(),
-      supabase
-        .from('draws')
-        .select('*')
-        .eq('trip_id', TRIP_ID)
-        .order('drawn_at', { ascending: false }),
+      supabase.from('draws').select('*').eq('trip_id', TRIP_ID).order('drawn_at', { ascending: false }),
     ])
 
   if (tripError) {
@@ -231,6 +231,8 @@ function App() {
         number,
         amount: number,
         draw_type: activeDrawType,
+        renato_separated: false,
+        livia_separated: false,
       })
 
       if (error) {
@@ -244,6 +246,62 @@ function App() {
     } finally {
       setBusyAction('')
     }
+  }
+
+  async function handleToggleSeparated(drawId, field, currentValue) {
+    setBusyAction(`${field}-${drawId}`)
+    setErrorMessage('')
+    setNotice('')
+
+    try {
+      const { error } = await supabase.from('draws').update({ [field]: !currentValue }).eq('id', drawId)
+
+      if (error) {
+        throw error
+      }
+
+      await refreshState(highlightedNumber)
+    } catch (error) {
+      setErrorMessage(error.message || 'Não foi possível atualizar a caixinha.')
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  function renderHistoryItem(entry) {
+    return (
+      <article key={entry.id} className="history-item">
+        <div className="history-number">{entry.number}</div>
+
+        <div className="history-content">
+          <strong>{formatCurrency(Number(entry.amount))} guardados</strong>
+          <p>
+            {getWeekTypeLabel(entry.draw_type)} · {formatDate(entry.drawn_at)}
+          </p>
+        </div>
+
+        <div className="history-flags" aria-label="Status da caixinha">
+          {stashOwners.map((owner) => {
+            const isChecked = Boolean(entry[owner.key])
+            const isSaving = busyAction === `${owner.key}-${entry.id}`
+
+            return (
+              <button
+                key={owner.key}
+                type="button"
+                className={['toggle-chip', isChecked ? 'checked' : ''].filter(Boolean).join(' ')}
+                onClick={() => handleToggleSeparated(entry.id, owner.key, isChecked)}
+                disabled={Boolean(busyAction)}
+                aria-pressed={isChecked}
+              >
+                <span>{owner.label}</span>
+                <strong>{isSaving ? '...' : isChecked ? 'Sim' : 'Não'}</strong>
+              </button>
+            )
+          })}
+        </div>
+      </article>
+    )
   }
 
   return (
@@ -321,8 +379,8 @@ function App() {
               : !isDrawDay
                 ? 'Não disponível hoje'
                 : activeEligibleNumbers.length === 0
-                ? 'Sem números disponíveis'
-                : 'Sortear valor'}
+                  ? 'Sem números disponíveis'
+                  : 'Sortear valor'}
           </button>
 
           <div className="quick-stats">
@@ -413,36 +471,12 @@ function App() {
             </div>
           ) : (
             <>
-              <div className="history-list compact">
-                {history.slice(0, 6).map((entry) => (
-                  <article key={entry.id} className="history-item">
-                    <div className="history-number">{entry.number}</div>
-                    <div className="history-content">
-                      <strong>{formatCurrency(Number(entry.amount))} guardados</strong>
-                      <p>
-                        {getWeekTypeLabel(entry.draw_type)} · {formatDate(entry.drawn_at)}
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <div className="history-list compact">{history.slice(0, 6).map(renderHistoryItem)}</div>
 
               {history.length > 6 ? (
                 <details className="history-details">
                   <summary>Ver histórico completo ({history.length})</summary>
-                  <div className="history-list expanded">
-                    {history.slice(6).map((entry) => (
-                      <article key={entry.id} className="history-item">
-                        <div className="history-number">{entry.number}</div>
-                        <div className="history-content">
-                          <strong>{formatCurrency(Number(entry.amount))} guardados</strong>
-                          <p>
-                            {getWeekTypeLabel(entry.draw_type)} · {formatDate(entry.drawn_at)}
-                          </p>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
+                  <div className="history-list expanded">{history.slice(6).map(renderHistoryItem)}</div>
                 </details>
               ) : null}
             </>
