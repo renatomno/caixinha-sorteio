@@ -1,0 +1,456 @@
+import { useEffect, useState } from 'react'
+import { supabase } from './lib/supabase'
+import './App.css'
+
+const TRIP_ID = Number(import.meta.env.VITE_SUPABASE_TRIP_ID || 1)
+const NUMBER_POOL = Array.from({ length: 99 }, (_, index) => index + 1)
+
+const weekDayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
+const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  dateStyle: 'long',
+  timeStyle: 'short',
+})
+const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+})
+
+const defaultState = {
+  destination: 'Nossa viagem dos sonhos',
+  targetAmount: 5000,
+  tripDate: '',
+  history: [],
+}
+
+function getWeekTypeFromDate(date) {
+  const day = date.getDay()
+
+  if (day === 1) {
+    return 'monday'
+  }
+
+  if (day === 5) {
+    return 'friday'
+  }
+
+  return 'monday'
+}
+
+function getWeekTypeLabel(type) {
+  return type === 'monday' ? 'Segunda-feira' : 'Sexta-feira'
+}
+
+function getWeekTypeHint(type) {
+  return type === 'monday'
+    ? 'Segunda sorteia só de 1 a 49. Sexta vale qualquer número livre de 1 a 99.'
+    : 'Sexta sorteia qualquer número livre de 1 a 99.'
+}
+
+function getCurrentDayMessage() {
+  const now = new Date()
+  const weekDay = weekDayFormatter.format(now)
+
+  if (now.getDay() === 1 || now.getDay() === 5) {
+    return `Hoje é ${weekDay}. A regra do dia já está aplicada.`
+  }
+
+  return `Hoje é ${weekDay}. O sorteio fica liberado só na segunda e na sexta.`
+}
+
+function formatCurrency(value) {
+  return currencyFormatter.format(value)
+}
+
+function formatDate(value) {
+  return dateFormatter.format(new Date(value))
+}
+
+function getEligibleNumbers(history, drawType) {
+  const usedNumbers = new Set(history.map((entry) => Number(entry.number)))
+
+  return NUMBER_POOL.filter((number) => {
+    if (usedNumbers.has(number)) {
+      return false
+    }
+
+    if (drawType === 'monday') {
+      return number < 50
+    }
+
+    return true
+  })
+}
+
+function countWeekdaysUntilTrip(tripDate) {
+  if (!tripDate) {
+    return { mondays: null, fridays: null }
+  }
+
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const end = new Date(`${tripDate}T00:00:00`)
+
+  if (Number.isNaN(end.getTime()) || end < start) {
+    return { mondays: 0, fridays: 0 }
+  }
+
+  const cursor = new Date(start)
+  let mondays = 0
+  let fridays = 0
+
+  while (cursor <= end) {
+    const day = cursor.getDay()
+
+    if (day === 1) {
+      mondays += 1
+    }
+
+    if (day === 5) {
+      fridays += 1
+    }
+
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return { mondays, fridays }
+}
+
+function normalizeTrip(trip, history) {
+  return {
+    destination: trip?.name || defaultState.destination,
+    targetAmount:
+      Number.isFinite(trip?.target_amount) && trip.target_amount > 0
+        ? trip.target_amount
+        : defaultState.targetAmount,
+    tripDate: trip?.trip_date || '',
+    history: Array.isArray(history) ? history : [],
+  }
+}
+
+async function fetchTripState() {
+  const [{ data: trip, error: tripError }, { data: draws, error: drawsError }] =
+    await Promise.all([
+      supabase.from('trips').select('*').eq('id', TRIP_ID).single(),
+      supabase
+        .from('draws')
+        .select('*')
+        .eq('trip_id', TRIP_ID)
+        .order('drawn_at', { ascending: false }),
+    ])
+
+  if (tripError) {
+    throw tripError
+  }
+
+  if (drawsError) {
+    throw drawsError
+  }
+
+  return normalizeTrip(trip, draws)
+}
+
+function App() {
+  const [appState, setAppState] = useState(defaultState)
+  const [highlightedNumber, setHighlightedNumber] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [busyAction, setBusyAction] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    async function loadState() {
+      try {
+        const nextState = await fetchTripState()
+
+        if (!active) {
+          return
+        }
+
+        setAppState(nextState)
+        setErrorMessage('')
+      } catch (error) {
+        if (active) {
+          setErrorMessage(error.message || 'Não foi possível carregar os dados.')
+        }
+      } finally {
+        if (active) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadState()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const history = appState.history
+  const totalSaved = history.reduce((sum, entry) => sum + Number(entry.amount), 0)
+  const usedNumbers = new Set(history.map((entry) => Number(entry.number)))
+
+  const completion = Math.round((history.length / 99) * 100)
+  const targetProgress = appState.targetAmount
+    ? Math.min(100, Math.round((totalSaved / appState.targetAmount) * 100))
+    : 0
+  const fridayRemaining = getEligibleNumbers(history, 'friday').length
+  const lastEntry = history[0]
+  const tripCountdown = countWeekdaysUntilTrip(appState.tripDate)
+  const appReady = !loading
+  const today = new Date()
+  const isDrawDay = today.getDay() === 1 || today.getDay() === 5
+  const activeDrawType = getWeekTypeFromDate(today)
+  const activeEligibleNumbers = getEligibleNumbers(history, activeDrawType)
+
+  async function refreshState(nextHighlight = null) {
+    const nextState = await fetchTripState()
+
+    setAppState(nextState)
+    setHighlightedNumber(nextHighlight)
+  }
+
+  async function handleDraw() {
+    if (!appReady || !isDrawDay || activeEligibleNumbers.length === 0) {
+      return
+    }
+
+    setBusyAction('draw')
+    setErrorMessage('')
+    setNotice('')
+
+    try {
+      const randomIndex = Math.floor(Math.random() * activeEligibleNumbers.length)
+      const number = activeEligibleNumbers[randomIndex]
+
+      const { error } = await supabase.from('draws').insert({
+        trip_id: TRIP_ID,
+        number,
+        amount: number,
+        draw_type: activeDrawType,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      await refreshState(number)
+      setNotice(`Sorteio salvo: ${number} (${formatCurrency(number)}).`)
+    } catch (error) {
+      setErrorMessage(error.message || 'Não foi possível salvar o sorteio.')
+    } finally {
+      setBusyAction('')
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <section className="compact-layout">
+        <article className="card hero-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Caixinha da viagem</p>
+              <h1>{appState.destination || 'Destino indefinido'}</h1>
+            </div>
+          </div>
+
+          <div className="hero-metrics">
+            <div className="metric-block feature">
+              <span>Guardado até agora</span>
+              <strong>{formatCurrency(totalSaved)}</strong>
+              <small>
+                {appState.targetAmount > 0
+                  ? `${targetProgress}% da meta de ${formatCurrency(appState.targetAmount)}`
+                  : 'Defina uma meta para acompanhar o total'}
+              </small>
+            </div>
+            <div className="metric-block">
+              <span>Meta em reais</span>
+              <strong>{formatCurrency(appState.targetAmount)}</strong>
+              <small>Valor definido para essa viagem</small>
+            </div>
+            <div className="metric-block">
+              <span>Segundas até a viagem</span>
+              <strong>{tripCountdown.mondays ?? '--'}</strong>
+              {appState.tripDate ? null : <small>Defina a data para calcular</small>}
+            </div>
+            <div className="metric-block">
+              <span>Sextas até a viagem</span>
+              <strong>{tripCountdown.fridays ?? '--'}</strong>
+              {appState.tripDate ? null : <small>Defina a data para calcular</small>}
+            </div>
+          </div>
+
+          <div className="status-box">
+            {loading ? <p>Carregando dados do Supabase...</p> : null}
+            {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
+            {notice ? <p className="notice-text">{notice}</p> : null}
+          </div>
+        </article>
+
+        <article className="card draw-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Sorteio</p>
+              <h2>{getWeekTypeLabel(activeDrawType)}</h2>
+            </div>
+            <span className="status-pill">{activeEligibleNumbers.length} livres</span>
+          </div>
+
+          <p className="support-text">{getCurrentDayMessage()}</p>
+          <p className="rule-note">{getWeekTypeHint(activeDrawType)}</p>
+
+          <div className="number-spotlight">
+            <span className="spotlight-label">Número atual</span>
+            <strong>{highlightedNumber ?? '--'}</strong>
+          </div>
+
+          <button
+            type="button"
+            className="draw-button"
+            onClick={handleDraw}
+            disabled={
+              !appReady || !isDrawDay || busyAction === 'draw' || activeEligibleNumbers.length === 0
+            }
+          >
+            {busyAction === 'draw'
+              ? 'Sorteando...'
+              : !isDrawDay
+                ? 'Não disponível hoje'
+                : activeEligibleNumbers.length === 0
+                ? 'Sem números disponíveis'
+                : 'Sortear valor'}
+          </button>
+
+          <div className="quick-stats">
+            <div>
+              <span>Último registro</span>
+              <strong>{lastEntry ? formatCurrency(Number(lastEntry.amount)) : '--'}</strong>
+            </div>
+            <div>
+              <span>Livres para sexta</span>
+              <strong>{fridayRemaining}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article className="card board-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Mapa visual</p>
+              <h2>Números de 1 a 99</h2>
+            </div>
+            <div className="board-meta">
+              <span className="status-pill">{history.length}/99 usados</span>
+              <span className="legend">
+                <span className="legend-dot used" />
+                saiu
+                <span className="legend-dot available" />
+                livre
+              </span>
+            </div>
+          </div>
+
+          <div className="progress-panel compact">
+            <div>
+              <div className="progress-label">
+                <span>Progresso dos números</span>
+                <strong>{completion}%</strong>
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill warm" style={{ width: `${completion}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="progress-label">
+                <span>Progresso da meta</span>
+                <strong>{targetProgress}%</strong>
+              </div>
+              <div className="progress-track">
+                <div className="progress-fill cool" style={{ width: `${targetProgress}%` }} />
+              </div>
+            </div>
+          </div>
+
+          <div className="number-board">
+            {NUMBER_POOL.map((number) => {
+              const isUsed = usedNumbers.has(number)
+              const isJustDrawn = highlightedNumber === number
+
+              return (
+                <div
+                  key={number}
+                  className={[
+                    'number-chip',
+                    isUsed ? 'used' : 'available',
+                    isJustDrawn ? 'highlighted' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {number}
+                </div>
+              )
+            })}
+          </div>
+        </article>
+
+        <article className="card history-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Histórico</p>
+              <h2>Últimos sorteios</h2>
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="empty-state">
+              <strong>Nenhum sorteio registrado ainda.</strong>
+              <p>O primeiro sorteio vai aparecer aqui com data e valor.</p>
+            </div>
+          ) : (
+            <>
+              <div className="history-list compact">
+                {history.slice(0, 6).map((entry) => (
+                  <article key={entry.id} className="history-item">
+                    <div className="history-number">{entry.number}</div>
+                    <div className="history-content">
+                      <strong>{formatCurrency(Number(entry.amount))} guardados</strong>
+                      <p>
+                        {getWeekTypeLabel(entry.draw_type)} · {formatDate(entry.drawn_at)}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              {history.length > 6 ? (
+                <details className="history-details">
+                  <summary>Ver histórico completo ({history.length})</summary>
+                  <div className="history-list expanded">
+                    {history.slice(6).map((entry) => (
+                      <article key={entry.id} className="history-item">
+                        <div className="history-number">{entry.number}</div>
+                        <div className="history-content">
+                          <strong>{formatCurrency(Number(entry.amount))} guardados</strong>
+                          <p>
+                            {getWeekTypeLabel(entry.draw_type)} · {formatDate(entry.drawn_at)}
+                          </p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
+            </>
+          )}
+        </article>
+      </section>
+    </main>
+  )
+}
+
+export default App
