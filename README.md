@@ -22,7 +22,7 @@ npm run dev
 
 ## Autenticacao com Supabase
 
-O app agora exige login por e-mail e senha usando Supabase Auth.
+O app agora exige login por e-mail e senha usando Supabase Auth. A tela tambem permite criar conta no primeiro acesso.
 
 ### 1. Ativar o login por e-mail e senha
 
@@ -32,9 +32,9 @@ No painel do Supabase:
 2. Ative `Email provider`.
 3. Garanta que o fluxo de senha esteja habilitado para o provider de e-mail.
 
-### 2. Criar os dois usuarios com senha
+### 2. Liberar os e-mails de voces
 
-Em `Authentication > Users`, crie os dois usuarios com os e-mails que vao poder acessar o app e defina uma senha para cada um.
+O cadastro pode ser feito pela propria tela do app, mas o acesso real continua limitado pelos e-mails liberados nas policies do Supabase.
 
 ### 3. Ligar RLS nas tabelas
 

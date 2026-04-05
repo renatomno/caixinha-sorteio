@@ -167,6 +167,7 @@ async function fetchTripState() {
 }
 
 function App() {
+  const [authMode, setAuthMode] = useState('signin')
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
@@ -311,6 +312,38 @@ function App() {
     }
   }
 
+  async function handleSignUp(event) {
+    event.preventDefault()
+
+    if (!authEmail || !authPassword) {
+      setAuthMessage('Preencha e-mail e senha para criar a conta.')
+      return
+    }
+
+    setAuthBusy(true)
+    setAuthMessage('')
+    setErrorMessage('')
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: authEmail.trim(),
+        password: authPassword,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      setAuthPassword('')
+      setAuthMode('signin')
+      setAuthMessage('Conta criada. Agora e so entrar com o e-mail e a senha.')
+    } catch (error) {
+      setAuthMessage(error.message || 'Nao foi possivel criar a conta agora.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
   async function handleSignOut() {
     setAuthBusy(true)
     setAuthMessage('')
@@ -435,12 +468,14 @@ function App() {
       <main className="app-shell auth-shell">
         <section className="card auth-card">
           <p className="eyebrow">Acesso protegido</p>
-          <h1>Entrar na caixinha</h1>
+          <h1>{authMode === 'signin' ? 'Entrar na caixinha' : 'Criar conta'}</h1>
           <p className="auth-copy">
-            Entrem com e-mail e senha do Supabase. O app continua liberado so para voces dois.
+            {authMode === 'signin'
+              ? 'Entrem com e-mail e senha do Supabase. O app continua liberado so para voces dois.'
+              : 'Se o e-mail ja estiver liberado no Supabase, ela mesma pode criar a conta e depois entrar.'}
           </p>
 
-          <form className="auth-form" onSubmit={handleSignIn}>
+          <form className="auth-form" onSubmit={authMode === 'signin' ? handleSignIn : handleSignUp}>
             <label className="field">
               <span>Seu e-mail</span>
               <input
@@ -464,9 +499,23 @@ function App() {
             </label>
 
             <button type="submit" className="draw-button" disabled={authBusy}>
-              {authBusy ? 'Entrando...' : 'Entrar'}
+              {authBusy ? (authMode === 'signin' ? 'Entrando...' : 'Criando conta...') : authMode === 'signin' ? 'Entrar' : 'Criar conta'}
             </button>
           </form>
+
+          <div className="auth-actions">
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={() => {
+                setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
+                setAuthMessage('')
+              }}
+              disabled={authBusy}
+            >
+              {authMode === 'signin' ? 'Primeiro acesso? Criar conta' : 'Ja tenho conta'}
+            </button>
+          </div>
 
           <div className="status-box">
             {authMessage ? <p>{authMessage}</p> : null}

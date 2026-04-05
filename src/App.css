@@ -36,6 +36,10 @@
   gap: 14px;
 }
 
+.auth-actions {
+  margin-top: 12px;
+}
+
 .auth-signout {
   margin-top: 12px;
 }
