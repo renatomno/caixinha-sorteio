@@ -22,25 +22,19 @@ npm run dev
 
 ## Autenticacao com Supabase
 
-O app agora exige login por e-mail usando magic link do Supabase Auth.
+O app agora exige login por e-mail e senha usando Supabase Auth.
 
-### 1. Ativar o login por e-mail
+### 1. Ativar o login por e-mail e senha
 
 No painel do Supabase:
 
 1. Abra `Authentication > Providers > Email`.
 2. Ative `Email provider`.
-3. Deixe `Confirm email` ligado.
-4. Em `URL Configuration`, adicione as URLs de redirecionamento do app.
+3. Garanta que o fluxo de senha esteja habilitado para o provider de e-mail.
 
-Exemplo:
+### 2. Criar os dois usuarios com senha
 
-- `http://localhost:5173`
-- `https://SEU_USUARIO.github.io/sorteio-caixinha`
-
-### 2. Criar os dois usuarios
-
-Em `Authentication > Users`, crie os dois usuarios com os e-mails que vao poder acessar o app.
+Em `Authentication > Users`, crie os dois usuarios com os e-mails que vao poder acessar o app e defina uma senha para cada um.
 
 ### 3. Ligar RLS nas tabelas
 

@@ -171,6 +171,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [authBusy, setAuthBusy] = useState(false)
   const [authEmail, setAuthEmail] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
   const [appState, setAppState] = useState(defaultState)
   const [highlightedNumber, setHighlightedNumber] = useState(null)
@@ -280,11 +281,11 @@ function App() {
     setHighlightedNumber(nextHighlight)
   }
 
-  async function handleSendMagicLink(event) {
+  async function handleSignIn(event) {
     event.preventDefault()
 
-    if (!authEmail) {
-      setAuthMessage('Preencha o e-mail para receber o link de acesso.')
+    if (!authEmail || !authPassword) {
+      setAuthMessage('Preencha e-mail e senha para entrar.')
       return
     }
 
@@ -293,20 +294,18 @@ function App() {
     setErrorMessage('')
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithPassword({
         email: authEmail.trim(),
-        options: {
-          emailRedirectTo: window.location.origin,
-        },
+        password: authPassword,
       })
 
       if (error) {
         throw error
       }
 
-      setAuthMessage('Link enviado. Abre teu e-mail e entra por ele.')
+      setAuthPassword('')
     } catch (error) {
-      setAuthMessage(error.message || 'Nao foi possivel enviar o link de acesso.')
+      setAuthMessage(error.message || 'Nao foi possivel entrar agora.')
     } finally {
       setAuthBusy(false)
     }
@@ -438,10 +437,10 @@ function App() {
           <p className="eyebrow">Acesso protegido</p>
           <h1>Entrar na caixinha</h1>
           <p className="auth-copy">
-            O acesso acontece por link magico no e-mail. Assim so voces conseguem abrir o app.
+            Entrem com e-mail e senha do Supabase. O app continua liberado so para voces dois.
           </p>
 
-          <form className="auth-form" onSubmit={handleSendMagicLink}>
+          <form className="auth-form" onSubmit={handleSignIn}>
             <label className="field">
               <span>Seu e-mail</span>
               <input
@@ -453,8 +452,19 @@ function App() {
               />
             </label>
 
+            <label className="field">
+              <span>Sua senha</span>
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(event) => setAuthPassword(event.target.value)}
+                placeholder="Digite sua senha"
+                autoComplete="current-password"
+              />
+            </label>
+
             <button type="submit" className="draw-button" disabled={authBusy}>
-              {authBusy ? 'Enviando...' : 'Receber link de acesso'}
+              {authBusy ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
 
