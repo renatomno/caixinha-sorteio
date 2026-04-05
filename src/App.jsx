@@ -553,9 +553,7 @@ function App() {
           </p>
 
           <div className="status-box">
-            <p className="error-text">
-              Confere se `VITE_ALLOWED_EMAILS` e as policies do Supabase incluem voces dois.
-            </p>
+            {authMessage ? <p className="error-text">{authMessage}</p> : null}
           </div>
 
           <button type="button" className="ghost-button auth-signout" onClick={handleSignOut}>
