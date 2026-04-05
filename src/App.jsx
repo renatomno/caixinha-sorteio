@@ -467,11 +467,6 @@ function App() {
       <main className="app-shell auth-shell">
         <section className="card auth-card">
           <h1>{authMode === 'signin' ? 'Entrar na caixinha' : 'Criar conta'}</h1>
-          <p className="auth-copy">
-            {authMode === 'signin'
-              ? 'Entre com seu e-mail e senha.'
-              : 'Se o e-mail ja estiver liberado no Supabase, ela mesma pode criar a conta e depois entrar.'}
-          </p>
 
           <form className="auth-form" onSubmit={authMode === 'signin' ? handleSignIn : handleSignUp}>
             <label className="field">
@@ -497,7 +492,13 @@ function App() {
             </label>
 
             <button type="submit" className="draw-button" disabled={authBusy}>
-              {authBusy ? (authMode === 'signin' ? 'Entrando...' : 'Criando conta...') : authMode === 'signin' ? 'Entrar' : 'Criar conta'}
+              {authBusy
+                ? authMode === 'signin'
+                  ? 'Entrando...'
+                  : 'Criando conta...'
+                : authMode === 'signin'
+                  ? 'Entrar'
+                  : 'Criar minha conta'}
             </button>
           </form>
 
@@ -511,7 +512,7 @@ function App() {
               }}
               disabled={authBusy}
             >
-              {authMode === 'signin' ? 'Primeiro acesso? Criar conta' : 'Ja tenho conta'}
+              {authMode === 'signin' ? 'Primeiro acesso? Cadastre-se' : 'Voltar para entrar'}
             </button>
           </div>
 
