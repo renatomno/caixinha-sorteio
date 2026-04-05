@@ -519,11 +519,6 @@ function App() {
 
           <div className="status-box">
             {authMessage ? <p>{authMessage}</p> : null}
-            {ALLOWED_EMAILS.length > 0 ? (
-              <p>Emails liberados: {ALLOWED_EMAILS.join(' e ')}</p>
-            ) : (
-              <p>Configure `VITE_ALLOWED_EMAILS` para mostrar a lista permitida tambem no front.</p>
-            )}
           </div>
         </section>
       </main>
