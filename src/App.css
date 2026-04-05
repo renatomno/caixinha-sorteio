@@ -36,8 +36,47 @@
   gap: 14px;
 }
 
-.auth-actions {
-  margin-top: 12px;
+.auth-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(122, 74, 53, 0.08);
+  border: 1px solid rgba(133, 92, 72, 0.12);
+}
+
+.auth-toggle-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #7a4a35;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.auth-toggle-button:hover {
+  transform: translateY(-1px);
+}
+
+.auth-toggle-button.active {
+  background: linear-gradient(135deg, #fff8ec, #ffe2bf);
+  color: #34170f;
+  box-shadow: 0 10px 20px rgba(106, 60, 41, 0.12);
+}
+
+.auth-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
 }
 
 .auth-signout {

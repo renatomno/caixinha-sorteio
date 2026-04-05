@@ -468,6 +468,38 @@ function App() {
         <section className="card auth-card">
           <h1>{authMode === 'signin' ? 'Entrar na caixinha' : 'Criar conta'}</h1>
 
+          <div className="auth-toggle" role="tablist" aria-label="Modo de autenticacao">
+            <button
+              type="button"
+              className={['auth-toggle-button', authMode === 'signin' ? 'active' : '']
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => {
+                setAuthMode('signin')
+                setAuthMessage('')
+              }}
+              aria-pressed={authMode === 'signin'}
+              disabled={authBusy}
+            >
+              Entrar
+            </button>
+
+            <button
+              type="button"
+              className={['auth-toggle-button', authMode === 'signup' ? 'active' : '']
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => {
+                setAuthMode('signup')
+                setAuthMessage('')
+              }}
+              aria-pressed={authMode === 'signup'}
+              disabled={authBusy}
+            >
+              Criar conta
+            </button>
+          </div>
+
           <form className="auth-form" onSubmit={authMode === 'signin' ? handleSignIn : handleSignUp}>
             <label className="field">
               <span>Seu e-mail</span>
@@ -501,20 +533,6 @@ function App() {
                   : 'Criar minha conta'}
             </button>
           </form>
-
-          <div className="auth-actions">
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={() => {
-                setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
-                setAuthMessage('')
-              }}
-              disabled={authBusy}
-            >
-              {authMode === 'signin' ? 'Primeiro acesso? Cadastre-se' : 'Voltar para entrar'}
-            </button>
-          </div>
 
           <div className="status-box">
             {authMessage ? <p>{authMessage}</p> : null}
