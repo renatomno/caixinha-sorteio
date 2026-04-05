@@ -456,7 +456,6 @@ function App() {
     return (
       <main className="app-shell auth-shell">
         <section className="card auth-card">
-          <p className="eyebrow">Acesso protegido</p>
           <h1>Verificando a sessao...</h1>
         </section>
       </main>
@@ -467,7 +466,6 @@ function App() {
     return (
       <main className="app-shell auth-shell">
         <section className="card auth-card">
-          <p className="eyebrow">Acesso protegido</p>
           <h1>{authMode === 'signin' ? 'Entrar na caixinha' : 'Criar conta'}</h1>
           <p className="auth-copy">
             {authMode === 'signin'
@@ -529,7 +527,6 @@ function App() {
     return (
       <main className="app-shell auth-shell">
         <section className="card auth-card">
-          <p className="eyebrow">Acesso protegido</p>
           <h1>Esse e-mail nao esta liberado</h1>
           <p className="auth-copy">
             {getUserEmail(user)} entrou, mas o app esta configurado para aceitar apenas os e-mails da
