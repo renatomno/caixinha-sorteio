@@ -471,7 +471,7 @@ function App() {
           <h1>{authMode === 'signin' ? 'Entrar na caixinha' : 'Criar conta'}</h1>
           <p className="auth-copy">
             {authMode === 'signin'
-              ? 'Entrem com e-mail e senha do Supabase. O app continua liberado so para voces dois.'
+              ? 'Entre com seu e-mail e senha.'
               : 'Se o e-mail ja estiver liberado no Supabase, ela mesma pode criar a conta e depois entrar.'}
           </p>
 
