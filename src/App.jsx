@@ -3,6 +3,10 @@ import { supabase } from './lib/supabase'
 import './App.css'
 
 const TRIP_ID = Number(import.meta.env.VITE_SUPABASE_TRIP_ID || 1)
+const ALLOWED_EMAILS = (import.meta.env.VITE_ALLOWED_EMAILS || '')
+  .split(',')
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean)
 const NUMBER_POOL = Array.from({ length: 99 }, (_, index) => index + 1)
 const stashOwners = [
   { key: 'renato_separated', label: 'Renato' },
@@ -47,8 +51,8 @@ function getWeekTypeLabel(type) {
 
 function getWeekTypeHint(type) {
   return type === 'monday'
-    ? 'Segunda sorteia só de 1 a 49. Sexta vale qualquer número livre de 1 a 99.'
-    : 'Sexta sorteia qualquer número livre de 1 a 99.'
+    ? 'Segunda sorteia so de 1 a 49. Sexta vale qualquer numero livre de 1 a 99.'
+    : 'Sexta sorteia qualquer numero livre de 1 a 99.'
 }
 
 function getCurrentDayMessage() {
@@ -56,10 +60,10 @@ function getCurrentDayMessage() {
   const weekDay = weekDayFormatter.format(now)
 
   if (now.getDay() === 1 || now.getDay() === 5) {
-    return `Hoje é ${weekDay}. A regra do dia já está aplicada.`
+    return `Hoje e ${weekDay}. A regra do dia ja esta aplicada.`
   }
 
-  return `Hoje é ${weekDay}. O sorteio fica liberado só na segunda e na sexta.`
+  return `Hoje e ${weekDay}. O sorteio fica liberado so na segunda e na sexta.`
 }
 
 function formatCurrency(value) {
@@ -132,6 +136,18 @@ function normalizeTrip(trip, history) {
   }
 }
 
+function getUserEmail(user) {
+  return user?.email?.toLowerCase() || ''
+}
+
+function isAllowedUser(user) {
+  if (ALLOWED_EMAILS.length === 0) {
+    return true
+  }
+
+  return ALLOWED_EMAILS.includes(getUserEmail(user))
+}
+
 async function fetchTripState() {
   const [{ data: trip, error: tripError }, { data: draws, error: drawsError }] =
     await Promise.all([
@@ -151,17 +167,66 @@ async function fetchTripState() {
 }
 
 function App() {
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authBusy, setAuthBusy] = useState(false)
+  const [authEmail, setAuthEmail] = useState('')
+  const [authMessage, setAuthMessage] = useState('')
   const [appState, setAppState] = useState(defaultState)
   const [highlightedNumber, setHighlightedNumber] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [busyAction, setBusyAction] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
+    let mounted = true
+
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession()
+
+      if (!mounted) {
+        return
+      }
+
+      if (error) {
+        setErrorMessage(error.message || 'Nao foi possivel verificar sua sessao.')
+      }
+
+      setSession(data.session)
+      setAuthLoading(false)
+    }
+
+    loadSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+      setAuthLoading(false)
+      setAuthMessage('')
+      setErrorMessage('')
+    })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     let active = true
 
     async function loadState() {
+      if (!session || !isAllowedUser(session.user)) {
+        setAppState(defaultState)
+        setHighlightedNumber(null)
+        setLoading(false)
+        return
+      }
+
+      setLoading(true)
+
       try {
         const nextState = await fetchTripState()
 
@@ -173,7 +238,7 @@ function App() {
         setErrorMessage('')
       } catch (error) {
         if (active) {
-          setErrorMessage(error.message || 'Não foi possível carregar os dados.')
+          setErrorMessage(error.message || 'Nao foi possivel carregar os dados.')
         }
       } finally {
         if (active) {
@@ -187,8 +252,10 @@ function App() {
     return () => {
       active = false
     }
-  }, [])
+  }, [session])
 
+  const user = session?.user ?? null
+  const canAccessApp = Boolean(session && isAllowedUser(user))
   const history = appState.history
   const totalSaved = history.reduce((sum, entry) => sum + Number(entry.amount), 0)
   const usedNumbers = new Set(history.map((entry) => Number(entry.number)))
@@ -200,7 +267,7 @@ function App() {
   const fridayRemaining = getEligibleNumbers(history, 'friday').length
   const lastEntry = history[0]
   const tripCountdown = countWeekdaysUntilTrip(appState.tripDate)
-  const appReady = !loading
+  const appReady = canAccessApp && !loading
   const today = new Date()
   const isDrawDay = today.getDay() === 1 || today.getDay() === 5
   const activeDrawType = getWeekTypeFromDate(today)
@@ -211,6 +278,55 @@ function App() {
 
     setAppState(nextState)
     setHighlightedNumber(nextHighlight)
+  }
+
+  async function handleSendMagicLink(event) {
+    event.preventDefault()
+
+    if (!authEmail) {
+      setAuthMessage('Preencha o e-mail para receber o link de acesso.')
+      return
+    }
+
+    setAuthBusy(true)
+    setAuthMessage('')
+    setErrorMessage('')
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: authEmail.trim(),
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      setAuthMessage('Link enviado. Abre teu e-mail e entra por ele.')
+    } catch (error) {
+      setAuthMessage(error.message || 'Nao foi possivel enviar o link de acesso.')
+    } finally {
+      setAuthBusy(false)
+    }
+  }
+
+  async function handleSignOut() {
+    setAuthBusy(true)
+    setAuthMessage('')
+
+    try {
+      const { error } = await supabase.auth.signOut()
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      setAuthMessage(error.message || 'Nao foi possivel sair agora.')
+    } finally {
+      setAuthBusy(false)
+    }
   }
 
   async function handleDraw() {
@@ -242,7 +358,7 @@ function App() {
       await refreshState(number)
       setNotice(`Sorteio salvo: ${number} (${formatCurrency(number)}).`)
     } catch (error) {
-      setErrorMessage(error.message || 'Não foi possível salvar o sorteio.')
+      setErrorMessage(error.message || 'Nao foi possivel salvar o sorteio.')
     } finally {
       setBusyAction('')
     }
@@ -262,7 +378,7 @@ function App() {
 
       await refreshState(highlightedNumber)
     } catch (error) {
-      setErrorMessage(error.message || 'Não foi possível atualizar a caixinha.')
+      setErrorMessage(error.message || 'Nao foi possivel atualizar a caixinha.')
     } finally {
       setBusyAction('')
     }
@@ -295,12 +411,88 @@ function App() {
                 aria-pressed={isChecked}
               >
                 <span>{owner.label}</span>
-                <strong>{isSaving ? '...' : isChecked ? 'Sim' : 'Não'}</strong>
+                <strong>{isSaving ? '...' : isChecked ? 'Sim' : 'Nao'}</strong>
               </button>
             )
           })}
         </div>
       </article>
+    )
+  }
+
+  if (authLoading) {
+    return (
+      <main className="app-shell auth-shell">
+        <section className="card auth-card">
+          <p className="eyebrow">Acesso protegido</p>
+          <h1>Verificando a sessao...</h1>
+        </section>
+      </main>
+    )
+  }
+
+  if (!session) {
+    return (
+      <main className="app-shell auth-shell">
+        <section className="card auth-card">
+          <p className="eyebrow">Acesso protegido</p>
+          <h1>Entrar na caixinha</h1>
+          <p className="auth-copy">
+            O acesso acontece por link magico no e-mail. Assim so voces conseguem abrir o app.
+          </p>
+
+          <form className="auth-form" onSubmit={handleSendMagicLink}>
+            <label className="field">
+              <span>Seu e-mail</span>
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(event) => setAuthEmail(event.target.value)}
+                placeholder="voce@exemplo.com"
+                autoComplete="email"
+              />
+            </label>
+
+            <button type="submit" className="draw-button" disabled={authBusy}>
+              {authBusy ? 'Enviando...' : 'Receber link de acesso'}
+            </button>
+          </form>
+
+          <div className="status-box">
+            {authMessage ? <p>{authMessage}</p> : null}
+            {ALLOWED_EMAILS.length > 0 ? (
+              <p>Emails liberados: {ALLOWED_EMAILS.join(' e ')}</p>
+            ) : (
+              <p>Configure `VITE_ALLOWED_EMAILS` para mostrar a lista permitida tambem no front.</p>
+            )}
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  if (!canAccessApp) {
+    return (
+      <main className="app-shell auth-shell">
+        <section className="card auth-card">
+          <p className="eyebrow">Acesso protegido</p>
+          <h1>Esse e-mail nao esta liberado</h1>
+          <p className="auth-copy">
+            {getUserEmail(user)} entrou, mas o app esta configurado para aceitar apenas os e-mails da
+            lista permitida.
+          </p>
+
+          <div className="status-box">
+            <p className="error-text">
+              Confere se `VITE_ALLOWED_EMAILS` e as policies do Supabase incluem voces dois.
+            </p>
+          </div>
+
+          <button type="button" className="ghost-button auth-signout" onClick={handleSignOut}>
+            Sair
+          </button>
+        </section>
+      </main>
     )
   }
 
@@ -313,11 +505,15 @@ function App() {
               <p className="eyebrow">Caixinha da viagem</p>
               <h1>{appState.destination || 'Destino indefinido'}</h1>
             </div>
+
+            <button type="button" className="ghost-button" onClick={handleSignOut} disabled={authBusy}>
+              {authBusy ? 'Saindo...' : 'Sair'}
+            </button>
           </div>
 
           <div className="hero-metrics">
             <div className="metric-block feature">
-              <span>Guardado até agora</span>
+              <span>Guardado ate agora</span>
               <strong>{formatCurrency(totalSaved)}</strong>
               <small>
                 {appState.targetAmount > 0
@@ -331,12 +527,12 @@ function App() {
               <small>Valor definido para essa viagem</small>
             </div>
             <div className="metric-block">
-              <span>Segundas até a viagem</span>
+              <span>Segundas ate a viagem</span>
               <strong>{tripCountdown.mondays ?? '--'}</strong>
               {appState.tripDate ? null : <small>Defina a data para calcular</small>}
             </div>
             <div className="metric-block">
-              <span>Sextas até a viagem</span>
+              <span>Sextas ate a viagem</span>
               <strong>{tripCountdown.fridays ?? '--'}</strong>
               {appState.tripDate ? null : <small>Defina a data para calcular</small>}
             </div>
@@ -346,6 +542,7 @@ function App() {
             {loading ? <p>Carregando dados do Supabase...</p> : null}
             {errorMessage ? <p className="error-text">{errorMessage}</p> : null}
             {notice ? <p className="notice-text">{notice}</p> : null}
+            {!loading && !errorMessage ? <p>Logado como {user.email}</p> : null}
           </div>
         </article>
 
@@ -362,7 +559,7 @@ function App() {
           <p className="rule-note">{getWeekTypeHint(activeDrawType)}</p>
 
           <div className="number-spotlight">
-            <span className="spotlight-label">Número atual</span>
+            <span className="spotlight-label">Numero atual</span>
             <strong>{highlightedNumber ?? '--'}</strong>
           </div>
 
@@ -377,15 +574,15 @@ function App() {
             {busyAction === 'draw'
               ? 'Sorteando...'
               : !isDrawDay
-                ? 'Não disponível hoje'
+                ? 'Nao disponivel hoje'
                 : activeEligibleNumbers.length === 0
-                  ? 'Sem números disponíveis'
+                  ? 'Sem numeros disponiveis'
                   : 'Sortear valor'}
           </button>
 
           <div className="quick-stats">
             <div>
-              <span>Último registro</span>
+              <span>Ultimo registro</span>
               <strong>{lastEntry ? formatCurrency(Number(lastEntry.amount)) : '--'}</strong>
             </div>
             <div>
@@ -399,7 +596,7 @@ function App() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Mapa visual</p>
-              <h2>Números de 1 a 99</h2>
+              <h2>Numeros de 1 a 99</h2>
             </div>
             <div className="board-meta">
               <span className="status-pill">{history.length}/99 usados</span>
@@ -415,7 +612,7 @@ function App() {
           <div className="progress-panel compact">
             <div>
               <div className="progress-label">
-                <span>Progresso dos números</span>
+                <span>Progresso dos numeros</span>
                 <strong>{completion}%</strong>
               </div>
               <div className="progress-track">
@@ -459,8 +656,8 @@ function App() {
         <article className="card history-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Histórico</p>
-              <h2>Últimos sorteios</h2>
+              <p className="eyebrow">Historico</p>
+              <h2>Ultimos sorteios</h2>
             </div>
           </div>
 
@@ -475,7 +672,7 @@ function App() {
 
               {history.length > 6 ? (
                 <details className="history-details">
-                  <summary>Ver histórico completo ({history.length})</summary>
+                  <summary>Ver historico completo ({history.length})</summary>
                   <div className="history-list expanded">{history.slice(6).map(renderHistoryItem)}</div>
                 </details>
               ) : null}
