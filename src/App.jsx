@@ -16,7 +16,6 @@ const stashOwners = [
 const weekDayFormatter = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' })
 const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'long',
-  timeStyle: 'short',
 })
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -42,28 +41,27 @@ function getWeekTypeFromDate(date) {
     return 'friday'
   }
 
-  return 'monday'
+  return null
 }
 
 function getWeekTypeLabel(type) {
-  return type === 'monday' ? 'Segunda-feira' : 'Sexta-feira'
+  if (type === 'monday') {
+    return 'Segunda-feira'
+  }
+
+  if (type === 'friday') {
+    return 'Sexta-feira'
+  }
+
+  return 'Segunda ou sexta'
 }
 
 function getWeekTypeHint(type) {
   return type === 'monday'
     ? 'Segunda sorteia so de 1 a 49. Sexta vale qualquer numero livre de 1 a 99.'
-    : 'Sexta sorteia qualquer numero livre de 1 a 99.'
-}
-
-function getCurrentDayMessage() {
-  const now = new Date()
-  const weekDay = weekDayFormatter.format(now)
-
-  if (now.getDay() === 1 || now.getDay() === 5) {
-    return `Hoje e ${weekDay}. A regra do dia ja esta aplicada.`
-  }
-
-  return `Hoje e ${weekDay}. O sorteio fica liberado so na segunda e na sexta.`
+    : type === 'friday'
+      ? 'Sexta sorteia qualquer numero livre de 1 a 99.'
+      : 'Escolha uma segunda ou sexta para liberar o sorteio.'
 }
 
 function formatCurrency(value) {
@@ -72,6 +70,120 @@ function formatCurrency(value) {
 
 function formatDate(value) {
   return dateFormatter.format(new Date(value))
+}
+
+function toDateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+function parseDateInput(value) {
+  if (!value) {
+    return null
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+
+  if (!year || !month || !day) {
+    return null
+  }
+
+  const parsed = new Date(year, month - 1, day)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+
+  return parsed
+}
+
+function getStoredDrawDate(value) {
+  const parsed = new Date(value)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return null
+  }
+
+  return parsed
+}
+
+function getTodayDateInputValue() {
+  return toDateKey(new Date())
+}
+
+function isFutureDate(date, today = new Date()) {
+  return date.getTime() > new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+}
+
+function isSameCalendarDay(left, right) {
+  return toDateKey(left) === toDateKey(right)
+}
+
+function findDrawByDate(history, dateKey) {
+  return history.find((entry) => {
+    const storedDate = getStoredDrawDate(entry.drawn_at)
+
+    return storedDate ? toDateKey(storedDate) === dateKey : false
+  })
+}
+
+function getDrawDateError(dateValue, history, today = new Date()) {
+  const selectedDate = parseDateInput(dateValue)
+
+  if (!selectedDate) {
+    return 'Escolha a data que esse sorteio deve representar.'
+  }
+
+  if (isFutureDate(selectedDate, today)) {
+    return 'Nao da para vincular o sorteio a uma data futura.'
+  }
+
+  const weekType = getWeekTypeFromDate(selectedDate)
+
+  if (!weekType) {
+    return 'So vale registrar sorteio em uma segunda ou sexta.'
+  }
+
+  if (findDrawByDate(history, toDateKey(selectedDate))) {
+    return `Ja existe um sorteio salvo para ${formatDate(selectedDate)}.`
+  }
+
+  return ''
+}
+
+function buildDrawTimestamp(dateValue) {
+  const selectedDate = parseDateInput(dateValue)
+
+  if (!selectedDate) {
+    return null
+  }
+
+  selectedDate.setHours(12, 0, 0, 0)
+  return selectedDate.toISOString()
+}
+
+function getDrawSelectionMessage(selectedDate, selectedWeekType) {
+  const now = new Date()
+  const todayLabel = weekDayFormatter.format(now)
+
+  if (!selectedDate) {
+    return `Hoje e ${todayLabel}. Escolha a data que esse sorteio deve representar.`
+  }
+
+  if (!selectedWeekType) {
+    return `Hoje e ${todayLabel}. Escolha uma segunda ou sexta para liberar o sorteio.`
+  }
+
+  if (isSameCalendarDay(selectedDate, now)) {
+    return `Hoje e ${todayLabel}. O sorteio vai entrar normalmente no dia de hoje.`
+  }
+
+  return `Hoje e ${todayLabel}. Este sorteio vai ficar vinculado a ${getWeekTypeLabel(
+    selectedWeekType,
+  ).toLowerCase()}, ${formatDate(selectedDate)}.`
 }
 
 function getEligibleNumbers(history, drawType) {
@@ -180,6 +292,7 @@ function App() {
   const [busyAction, setBusyAction] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
+  const [drawDate, setDrawDate] = useState(getTodayDateInputValue())
 
   useEffect(() => {
     let mounted = true
@@ -271,9 +384,14 @@ function App() {
   const tripCountdown = countWeekdaysUntilTrip(appState.tripDate)
   const appReady = canAccessApp && !loading
   const today = new Date()
-  const isDrawDay = today.getDay() === 1 || today.getDay() === 5
-  const activeDrawType = getWeekTypeFromDate(today)
-  const activeEligibleNumbers = getEligibleNumbers(history, activeDrawType)
+  const selectedDrawDate = parseDateInput(drawDate)
+  const selectedDrawType = selectedDrawDate ? getWeekTypeFromDate(selectedDrawDate) : null
+  const drawDateError = getDrawDateError(drawDate, history, today)
+  const activeEligibleNumbers = selectedDrawType ? getEligibleNumbers(history, selectedDrawType) : []
+  const isRetroactiveDraw = Boolean(
+    selectedDrawDate && selectedDrawType && !isSameCalendarDay(selectedDrawDate, today),
+  )
+  const drawSelectionMessage = getDrawSelectionMessage(selectedDrawDate, selectedDrawType)
 
   async function refreshState(nextHighlight = null) {
     const nextState = await fetchTripState()
@@ -362,7 +480,7 @@ function App() {
   }
 
   async function handleDraw() {
-    if (!appReady || !isDrawDay || activeEligibleNumbers.length === 0) {
+    if (!appReady || drawDateError || !selectedDrawType || activeEligibleNumbers.length === 0) {
       return
     }
 
@@ -378,7 +496,8 @@ function App() {
         trip_id: TRIP_ID,
         number,
         amount: number,
-        draw_type: activeDrawType,
+        draw_type: selectedDrawType,
+        drawn_at: buildDrawTimestamp(drawDate),
         renato_separated: false,
         livia_separated: false,
       })
@@ -388,7 +507,10 @@ function App() {
       }
 
       await refreshState(number)
-      setNotice(`Sorteio salvo: ${number} (${formatCurrency(number)}).`)
+      setDrawDate('')
+      setNotice(
+        `Sorteio salvo: ${number} (${formatCurrency(number)}) para ${formatDate(selectedDrawDate)}.`,
+      )
     } catch (error) {
       setErrorMessage(error.message || 'Nao foi possivel salvar o sorteio.')
     } finally {
@@ -618,13 +740,47 @@ function App() {
           <div className="section-heading">
             <div>
               <p className="eyebrow">Sorteio</p>
-              <h2>{getWeekTypeLabel(activeDrawType)}</h2>
+              <h2>{getWeekTypeLabel(selectedDrawType)}</h2>
             </div>
-            <span className="status-pill">{activeEligibleNumbers.length} livres</span>
+            <div className="draw-meta">
+              <span className="status-pill">{activeEligibleNumbers.length} livres</span>
+              {isRetroactiveDraw ? <span className="status-pill retroactive-pill">Retroativo</span> : null}
+            </div>
           </div>
 
-          <p className="support-text">{getCurrentDayMessage()}</p>
-          <p className="rule-note">{getWeekTypeHint(activeDrawType)}</p>
+          <p className="support-text">{drawSelectionMessage}</p>
+          <p className="rule-note">{getWeekTypeHint(selectedDrawType)}</p>
+
+          <div className="draw-date-panel">
+            <label className="field">
+              <span>Data que vale para o sorteio</span>
+              <input
+                type="date"
+                value={drawDate}
+                max={getTodayDateInputValue()}
+                onChange={(event) => setDrawDate(event.target.value)}
+              />
+            </label>
+
+            <div className="draw-date-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setDrawDate(getTodayDateInputValue())}
+                disabled={drawDate === getTodayDateInputValue()}
+              >
+                Usar hoje
+              </button>
+            </div>
+
+            {drawDateError ? (
+              <p className="draw-date-feedback error-text">{drawDateError}</p>
+            ) : isRetroactiveDraw ? (
+              <p className="draw-date-feedback">
+                Esse registro vai aparecer no historico como {formatDate(selectedDrawDate)}.
+              </p>
+            ) : null}
+          </div>
 
           <div className="number-spotlight">
             <span className="spotlight-label">Numero atual</span>
@@ -635,14 +791,12 @@ function App() {
             type="button"
             className="draw-button"
             onClick={handleDraw}
-            disabled={
-              !appReady || !isDrawDay || busyAction === 'draw' || activeEligibleNumbers.length === 0
-            }
+            disabled={!appReady || Boolean(drawDateError) || busyAction === 'draw' || activeEligibleNumbers.length === 0}
           >
             {busyAction === 'draw'
               ? 'Sorteando...'
-              : !isDrawDay
-                ? 'Nao disponivel hoje'
+              : drawDateError
+                ? 'Escolha uma data valida'
                 : activeEligibleNumbers.length === 0
                   ? 'Sem numeros disponiveis'
                   : 'Sortear valor'}

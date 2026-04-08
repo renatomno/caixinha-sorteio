@@ -163,6 +163,12 @@
   border: 1px solid rgba(190, 126, 68, 0.2);
 }
 
+.retroactive-pill {
+  color: #6e3f30;
+  background: rgba(126, 82, 62, 0.08);
+  border-color: rgba(126, 82, 62, 0.16);
+}
+
 .board-meta {
   display: flex;
   flex-direction: column;
@@ -299,6 +305,43 @@
   margin: 0 0 10px;
   line-height: 1.4;
   font-size: 0.96rem;
+}
+
+.draw-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.draw-date-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(132, 92, 74, 0.12);
+}
+
+.draw-date-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.draw-date-actions .ghost-button {
+  min-height: 38px;
+}
+
+.draw-date-feedback {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 250, 239, 0.92);
+  border: 1px solid rgba(205, 156, 94, 0.18);
+  color: #6f4b3f;
+  line-height: 1.35;
 }
 
 .number-spotlight {
