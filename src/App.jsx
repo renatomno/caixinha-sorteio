@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase, supabaseProjectHost, supabaseStorageKey } from './lib/supabase'
 import './App.css'
+import PwaInstallPrompt from './components/PwaInstallPrompt'
+import { useInstallPrompt } from './hooks/useInstallPrompt'
 
 const TRIP_ID = Number(import.meta.env.VITE_SUPABASE_TRIP_ID || 1)
 const ALLOWED_EMAILS = (import.meta.env.VITE_ALLOWED_EMAILS || '')
@@ -390,6 +392,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
   const [drawDate, setDrawDate] = useState(getTodayDateInputValue())
+  const { canInstall, dismissInstallPrompt, promptInstall, showIosInstallHint } = useInstallPrompt()
   const authUserId = session?.user?.id || ''
   const authUserEmail = getUserEmail(session?.user)
   const authAllowed = Boolean(session?.user && isAllowedUser(session.user))
@@ -612,6 +615,14 @@ function App() {
     selectedDrawDate && selectedDrawType && !isSameCalendarDay(selectedDrawDate, today),
   )
   const drawSelectionMessage = getDrawSelectionMessage(selectedDrawDate, selectedDrawType)
+  const installPrompt = (
+    <PwaInstallPrompt
+      canInstall={canInstall}
+      onDismiss={dismissInstallPrompt}
+      onInstall={promptInstall}
+      showIosInstallHint={showIosInstallHint}
+    />
+  )
 
   async function refreshState(nextHighlight = null) {
     logApp('data:refreshState:start', {
@@ -921,6 +932,8 @@ function App() {
           <div className="status-box">
             {authMessage ? <p>{authMessage}</p> : null}
           </div>
+
+          {installPrompt}
         </section>
       </main>
     )
@@ -939,6 +952,8 @@ function App() {
           <div className="status-box">
             {authMessage ? <p className="error-text">{authMessage}</p> : null}
           </div>
+
+          {installPrompt}
 
           <button type="button" className="ghost-button auth-signout" onClick={handleSignOut}>
             Sair
@@ -996,6 +1011,8 @@ function App() {
             {notice ? <p className="notice-text">{notice}</p> : null}
             {!loading && !errorMessage ? <p>Logado como {user.email}</p> : null}
           </div>
+
+          {installPrompt}
         </article>
 
         <article className="card draw-card">

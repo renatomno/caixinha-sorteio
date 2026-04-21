@@ -20,6 +20,25 @@ npm install
 npm run dev
 ```
 
+## PWA no celular
+
+O app agora tambem pode ser usado como PWA. Isso significa que ele continua abrindo por link, mas pode ser instalado na tela inicial do celular como se fosse um app.
+
+- No Android, o navegador pode mostrar o botao de instalar automaticamente.
+- No iPhone e iPad, a instalacao costuma ser pelo menu `Compartilhar > Adicionar a Tela de Inicio`.
+- O service worker e o manifesto sao publicados junto com o build, entao o GitHub Pages ja serve a versao instalavel em HTTPS.
+
+### Como testar localmente
+
+Para validar o fluxo de instalacao e cache offline, teste a versao de producao:
+
+```bash
+npm run build
+npm run preview
+```
+
+Abra a URL exibida pelo Vite no celular ou em um navegador com simulacao mobile. O `npm run dev` continua bom para desenvolver a interface, mas a instalacao PWA depende da versao buildada.
+
 ## Autenticacao com Supabase
 
 O app agora exige login por e-mail e senha usando Supabase Auth. A tela tambem permite criar conta no primeiro acesso.
@@ -87,6 +106,8 @@ Se ja existirem policies antigas liberando `anon`, revise ou remova antes de pub
 ## Deploy no GitHub Pages
 
 O workflow em `.github/workflows/deploy.yml` faz o build e publica o site no GitHub Pages.
+
+Depois do deploy, o PWA fica disponivel no mesmo link publicado pelo Pages.
 
 Adicione estes secrets no repositorio:
 

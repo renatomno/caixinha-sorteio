@@ -259,6 +259,66 @@
   line-height: 1.35;
 }
 
+.install-callout {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 236, 197, 0.9), transparent 35%),
+    linear-gradient(135deg, rgba(255, 248, 236, 0.98), rgba(255, 232, 213, 0.94));
+  border: 1px solid rgba(205, 137, 85, 0.22);
+}
+
+.install-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.install-pill {
+  width: fit-content;
+}
+
+.install-copy strong {
+  color: #2d160d;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.install-copy p {
+  margin: 0;
+  color: #6f4b3f;
+  line-height: 1.45;
+}
+
+.install-steps {
+  margin: 0;
+  padding-left: 18px;
+  color: #6f4b3f;
+}
+
+.install-steps li + li {
+  margin-top: 4px;
+}
+
+.install-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.install-primary {
+  width: auto;
+  min-width: 160px;
+  padding: 0 18px;
+}
+
+.install-close {
+  min-width: 116px;
+}
+
 .error-text {
   color: #8f2f2f !important;
   border-color: rgba(181, 66, 66, 0.18) !important;
@@ -712,5 +772,15 @@
 
   .board-meta {
     align-items: flex-start;
+  }
+
+  .install-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .install-primary,
+  .install-close {
+    width: 100%;
   }
 }
