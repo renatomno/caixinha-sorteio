@@ -65,6 +65,15 @@ function summarizeSession(session) {
   }
 }
 
+function isSameAuthenticatedUser(leftSession, rightSession) {
+  const leftUserId = leftSession?.user?.id || null
+  const rightUserId = rightSession?.user?.id || null
+  const leftEmail = getUserEmail(leftSession?.user)
+  const rightEmail = getUserEmail(rightSession?.user)
+
+  return Boolean(leftUserId && rightUserId && leftUserId === rightUserId && leftEmail === rightEmail)
+}
+
 function getAuthStorageSnapshot() {
   if (typeof window === 'undefined' || !window.localStorage) {
     return { available: false, entries: [] }
@@ -381,6 +390,10 @@ function App() {
   const [errorMessage, setErrorMessage] = useState('')
   const [notice, setNotice] = useState('')
   const [drawDate, setDrawDate] = useState(getTodayDateInputValue())
+  const authUserId = session?.user?.id || ''
+  const authUserEmail = getUserEmail(session?.user)
+  const authAllowed = Boolean(session?.user && isAllowedUser(session.user))
+  const authIdentityKey = authUserId ? `${authUserId}:${authUserEmail}` : ''
 
   useEffect(() => {
     let mounted = true
@@ -452,6 +465,15 @@ function App() {
         })
 
         if (nextSession) {
+          if (event === 'TOKEN_REFRESHED' && isSameAuthenticatedUser(currentSession, nextSession)) {
+            logApp('auth:setSession:ignored-token-refresh', {
+              event,
+              currentSession: summarizeSession(currentSession),
+              nextSession: summarizeSession(nextSession),
+            })
+            return currentSession
+          }
+
           return nextSession
         }
 
@@ -487,11 +509,11 @@ function App() {
     async function loadState() {
       let loadStateErrorMessage = null
 
-      if (!session || !isAllowedUser(session.user)) {
+      if (!authIdentityKey || !authAllowed) {
         logApp('data:loadState:skip', {
-          hasSession: Boolean(session),
-          email: getUserEmail(session?.user),
-          allowedUser: session ? isAllowedUser(session.user) : null,
+          hasSession: Boolean(authIdentityKey),
+          email: authUserEmail,
+          allowedUser: authIdentityKey ? authAllowed : null,
         })
         setAppState(defaultState)
         setHighlightedNumber(null)
@@ -500,7 +522,9 @@ function App() {
       }
 
       logApp('data:loadState:start', {
-        session: summarizeSession(session),
+        authIdentityKey,
+        userId: authUserId,
+        email: authUserEmail,
       })
       setLoading(true)
 
@@ -542,7 +566,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [session])
+  }, [authAllowed, authIdentityKey, authUserEmail, authUserId])
 
   useEffect(() => {
     logApp('state:session', {
