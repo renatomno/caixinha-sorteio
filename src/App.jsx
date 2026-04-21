@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { supabase } from './lib/supabase'
+import { useEffect, useRef, useState } from 'react'
+import { supabase, supabaseProjectHost, supabaseStorageKey } from './lib/supabase'
 import './App.css'
 
 const TRIP_ID = Number(import.meta.env.VITE_SUPABASE_TRIP_ID || 1)
@@ -28,6 +28,68 @@ const defaultState = {
   targetAmount: 5000,
   tripDate: '',
   history: [],
+}
+
+function debugLog(step, details = {}) {
+  console.log('[CaixinhaDebug]', new Date().toISOString(), step, details)
+}
+
+function summarizeError(error) {
+  if (!error) {
+    return null
+  }
+
+  return {
+    name: error.name || null,
+    message: error.message || null,
+    code: error.code || null,
+    status: error.status || null,
+    details: error.details || null,
+    hint: error.hint || null,
+  }
+}
+
+function summarizeSession(session) {
+  if (!session) {
+    return null
+  }
+
+  return {
+    userId: session.user?.id || null,
+    email: session.user?.email || null,
+    expiresAt: session.expires_at || null,
+    expiresIn: session.expires_in || null,
+    tokenType: session.token_type || null,
+    hasAccessToken: Boolean(session.access_token),
+    hasRefreshToken: Boolean(session.refresh_token),
+  }
+}
+
+function getAuthStorageSnapshot() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { available: false, entries: [] }
+  }
+
+  try {
+    const entries = Object.keys(window.localStorage)
+      .filter((key) => key.includes('supabase') || key.includes('auth'))
+      .sort()
+      .map((key) => ({
+        key,
+        length: window.localStorage.getItem(key)?.length || 0,
+      }))
+
+    return {
+      available: true,
+      entries,
+    }
+  } catch (error) {
+    return {
+      available: false,
+      entries: [],
+      error: summarizeError(error),
+    }
+  }
 }
 
 function getWeekTypeFromDate(date) {
@@ -261,6 +323,10 @@ function isAllowedUser(user) {
 }
 
 async function fetchTripState() {
+  debugLog('data:fetchTripState:start', {
+    tripId: TRIP_ID,
+  })
+
   const [{ data: trip, error: tripError }, { data: draws, error: drawsError }] =
     await Promise.all([
       supabase.from('trips').select('*').eq('id', TRIP_ID).single(),
@@ -268,17 +334,39 @@ async function fetchTripState() {
     ])
 
   if (tripError) {
+    debugLog('data:fetchTripState:trip-error', {
+      tripId: TRIP_ID,
+      error: summarizeError(tripError),
+    })
     throw tripError
   }
 
   if (drawsError) {
+    debugLog('data:fetchTripState:draws-error', {
+      tripId: TRIP_ID,
+      error: summarizeError(drawsError),
+    })
     throw drawsError
   }
+
+  debugLog('data:fetchTripState:success', {
+    tripId: trip?.id || null,
+    tripName: trip?.name || null,
+    drawsCount: Array.isArray(draws) ? draws.length : null,
+  })
 
   return normalizeTrip(trip, draws)
 }
 
 function App() {
+  const debugInstanceId = useRef(`app-${Math.random().toString(36).slice(2, 8)}`)
+  const logApp = (step, details = {}) => {
+    debugLog(step, {
+      instanceId: debugInstanceId.current,
+      ...details,
+    })
+  }
+
   const [authMode, setAuthMode] = useState('signin')
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -297,12 +385,45 @@ function App() {
   useEffect(() => {
     let mounted = true
 
+    logApp('app:init', {
+      tripId: TRIP_ID,
+      allowedEmails: ALLOWED_EMAILS,
+      projectHost: supabaseProjectHost,
+      storageKey: supabaseStorageKey,
+      storageSnapshot: getAuthStorageSnapshot(),
+    })
+
+    function handleStorage(event) {
+      if (!event.key || (!event.key.includes('supabase') && !event.key.includes('auth'))) {
+        return
+      }
+
+      logApp('browser:storage', {
+        key: event.key,
+        oldLength: event.oldValue?.length || 0,
+        newLength: event.newValue?.length || 0,
+      })
+    }
+
+    window.addEventListener('storage', handleStorage)
+
     async function loadSession() {
+      logApp('auth:getSession:start', {
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
+
       const { data, error } = await supabase.auth.getSession()
 
       if (!mounted) {
+        logApp('auth:getSession:ignored-unmounted')
         return
       }
+
+      logApp('auth:getSession:result', {
+        error: summarizeError(error),
+        session: summarizeSession(data.session),
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
 
       if (error) {
         setErrorMessage(error.message || 'Nao foi possivel verificar sua sessao.')
@@ -317,7 +438,19 @@ function App() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      logApp('auth:onAuthStateChange', {
+        event,
+        nextSession: summarizeSession(nextSession),
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
+
       setSession((currentSession) => {
+        logApp('auth:setSession:fromAuthEvent', {
+          event,
+          currentSession: summarizeSession(currentSession),
+          nextSession: summarizeSession(nextSession),
+        })
+
         if (nextSession) {
           return nextSession
         }
@@ -342,6 +475,8 @@ function App() {
 
     return () => {
       mounted = false
+      window.removeEventListener('storage', handleStorage)
+      logApp('app:cleanup')
       subscription.unsubscribe()
     }
   }, [])
@@ -350,31 +485,54 @@ function App() {
     let active = true
 
     async function loadState() {
+      let loadStateErrorMessage = null
+
       if (!session || !isAllowedUser(session.user)) {
+        logApp('data:loadState:skip', {
+          hasSession: Boolean(session),
+          email: getUserEmail(session?.user),
+          allowedUser: session ? isAllowedUser(session.user) : null,
+        })
         setAppState(defaultState)
         setHighlightedNumber(null)
         setLoading(false)
         return
       }
 
+      logApp('data:loadState:start', {
+        session: summarizeSession(session),
+      })
       setLoading(true)
 
       try {
         const nextState = await fetchTripState()
 
         if (!active) {
+          logApp('data:loadState:ignored-inactive')
           return
         }
 
         setAppState(nextState)
         setErrorMessage('')
+        logApp('data:loadState:success', {
+          destination: nextState.destination,
+          historyCount: nextState.history.length,
+          tripDate: nextState.tripDate,
+        })
       } catch (error) {
         if (active) {
-          setErrorMessage(error.message || 'Nao foi possivel carregar os dados.')
+          loadStateErrorMessage = error.message || 'Nao foi possivel carregar os dados.'
+          setErrorMessage(loadStateErrorMessage)
+          logApp('data:loadState:error', {
+            error: summarizeError(error),
+          })
         }
       } finally {
         if (active) {
           setLoading(false)
+          logApp('data:loadState:end', {
+            errorMessage: loadStateErrorMessage,
+          })
         }
       }
     }
@@ -385,6 +543,27 @@ function App() {
       active = false
     }
   }, [session])
+
+  useEffect(() => {
+    logApp('state:session', {
+      session: summarizeSession(session),
+      authLoading,
+      loading,
+      storageSnapshot: getAuthStorageSnapshot(),
+    })
+  }, [authLoading, loading, session])
+
+  useEffect(() => {
+    if (!errorMessage && !authMessage && !notice) {
+      return
+    }
+
+    logApp('state:messages', {
+      errorMessage: errorMessage || null,
+      authMessage: authMessage || null,
+      notice: notice || null,
+    })
+  }, [authMessage, errorMessage, notice])
 
   const user = session?.user ?? null
   const canAccessApp = Boolean(session && isAllowedUser(user))
@@ -411,10 +590,18 @@ function App() {
   const drawSelectionMessage = getDrawSelectionMessage(selectedDrawDate, selectedDrawType)
 
   async function refreshState(nextHighlight = null) {
+    logApp('data:refreshState:start', {
+      nextHighlight,
+    })
+
     const nextState = await fetchTripState()
 
     setAppState(nextState)
     setHighlightedNumber(nextHighlight)
+    logApp('data:refreshState:success', {
+      historyCount: nextState.history.length,
+      nextHighlight,
+    })
   }
 
   async function handleSignIn(event) {
@@ -428,6 +615,10 @@ function App() {
     setAuthBusy(true)
     setAuthMessage('')
     setErrorMessage('')
+    logApp('auth:signIn:start', {
+      email: authEmail.trim().toLowerCase(),
+      storageSnapshot: getAuthStorageSnapshot(),
+    })
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -439,9 +630,17 @@ function App() {
         throw error
       }
 
+      logApp('auth:signIn:success', {
+        session: summarizeSession(data.session),
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
       setSession((currentSession) => data.session ?? currentSession)
       setAuthPassword('')
     } catch (error) {
+      logApp('auth:signIn:error', {
+        error: summarizeError(error),
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
       setAuthMessage(error.message || 'Nao foi possivel entrar agora.')
     } finally {
       setAuthBusy(false)
@@ -459,6 +658,9 @@ function App() {
     setAuthBusy(true)
     setAuthMessage('')
     setErrorMessage('')
+    logApp('auth:signUp:start', {
+      email: authEmail.trim().toLowerCase(),
+    })
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -470,10 +672,16 @@ function App() {
         throw error
       }
 
+      logApp('auth:signUp:success', {
+        email: authEmail.trim().toLowerCase(),
+      })
       setAuthPassword('')
       setAuthMode('signin')
       setAuthMessage('Conta criada. Agora e so entrar com o e-mail e a senha.')
     } catch (error) {
+      logApp('auth:signUp:error', {
+        error: summarizeError(error),
+      })
       setAuthMessage(error.message || 'Nao foi possivel criar a conta agora.')
     } finally {
       setAuthBusy(false)
@@ -483,6 +691,10 @@ function App() {
   async function handleSignOut() {
     setAuthBusy(true)
     setAuthMessage('')
+    logApp('auth:signOut:start', {
+      session: summarizeSession(session),
+      storageSnapshot: getAuthStorageSnapshot(),
+    })
 
     try {
       const { error } = await supabase.auth.signOut()
@@ -490,7 +702,15 @@ function App() {
       if (error) {
         throw error
       }
+
+      logApp('auth:signOut:success', {
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
     } catch (error) {
+      logApp('auth:signOut:error', {
+        error: summarizeError(error),
+        storageSnapshot: getAuthStorageSnapshot(),
+      })
       setAuthMessage(error.message || 'Nao foi possivel sair agora.')
     } finally {
       setAuthBusy(false)

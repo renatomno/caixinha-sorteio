@@ -2,7 +2,21 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-const supabaseStorageKey = 'sorteio-caixinha-auth'
+export const supabaseStorageKey = 'sorteio-caixinha-auth'
+export const supabaseProjectHost = (() => {
+  try {
+    return new URL(supabaseUrl).host
+  } catch {
+    return null
+  }
+})()
+
+console.log('[CaixinhaDebug]', new Date().toISOString(), 'supabase:client:init', {
+  projectHost: supabaseProjectHost,
+  storageKey: supabaseStorageKey,
+  hasSupabaseUrl: Boolean(supabaseUrl),
+  hasPublishableKey: Boolean(supabasePublishableKey),
+})
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
