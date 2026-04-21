@@ -1,3 +1,4 @@
+import { processLock } from '@supabase/auth-js'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -16,6 +17,7 @@ console.log('[CaixinhaDebug]', new Date().toISOString(), 'supabase:client:init',
   storageKey: supabaseStorageKey,
   hasSupabaseUrl: Boolean(supabaseUrl),
   hasPublishableKey: Boolean(supabasePublishableKey),
+  lockStrategy: 'processLock',
 })
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
@@ -24,5 +26,7 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     detectSessionInUrl: true,
     persistSession: true,
     storageKey: supabaseStorageKey,
+    lock: processLock,
+    lockAcquireTimeout: 15000,
   },
 })
