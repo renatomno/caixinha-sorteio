@@ -308,7 +308,7 @@ function App() {
         setErrorMessage(error.message || 'Nao foi possivel verificar sua sessao.')
       }
 
-      setSession(data.session)
+      setSession((currentSession) => data.session ?? currentSession)
       setAuthLoading(false)
     }
 
@@ -316,11 +316,28 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      setSession((currentSession) => {
+        if (nextSession) {
+          return nextSession
+        }
+
+        // Keep the current login if Supabase emits a late bootstrap event without a session.
+        return event === 'SIGNED_OUT' ? null : currentSession
+      })
+
+      if (nextSession || event === 'SIGNED_OUT') {
+        setAuthMessage('')
+        setErrorMessage('')
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setAppState(defaultState)
+        setHighlightedNumber(null)
+        setLoading(false)
+      }
+
       setAuthLoading(false)
-      setAuthMessage('')
-      setErrorMessage('')
     })
 
     return () => {
@@ -413,7 +430,7 @@ function App() {
     setErrorMessage('')
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: authEmail.trim(),
         password: authPassword,
       })
@@ -422,6 +439,7 @@ function App() {
         throw error
       }
 
+      setSession((currentSession) => data.session ?? currentSession)
       setAuthPassword('')
     } catch (error) {
       setAuthMessage(error.message || 'Nao foi possivel entrar agora.')
