@@ -505,9 +505,12 @@
 
 .history-item {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) minmax(180px, 220px);
+  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-areas:
+    'number content'
+    'number flags';
   gap: 10px;
-  align-items: center;
+  align-items: start;
   padding: 10px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.74);
@@ -515,16 +518,23 @@
 }
 
 .history-number {
+  grid-area: number;
   display: grid;
   place-items: center;
   width: 52px;
   height: 52px;
+  align-self: center;
   border-radius: 14px;
   background: linear-gradient(135deg, #332018, #614131);
   color: #fff8ee;
   font-family: 'Fraunces', serif;
   font-size: 1.5rem;
   line-height: 1;
+}
+
+.history-content {
+  grid-area: content;
+  min-width: 0;
 }
 
 .history-content strong {
@@ -540,9 +550,11 @@
 }
 
 .history-flags {
+  grid-area: flags;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 
 .toggle-chip {
@@ -668,10 +680,13 @@
 
   .history-item {
     grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-areas:
+      'number content'
+      'flags flags';
   }
 
   .history-flags {
-    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .number-board {
